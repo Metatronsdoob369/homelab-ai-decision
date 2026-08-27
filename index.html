@@ -286,7 +286,7 @@
 
   <div class="card" style="margin-top:16px;">
     <h2>Upload listings</h2>
-    <p class="lede" style="margin-bottom:10px;font-size:13px;">Drop a JSON file — not a product URL. A shop link is not fetched from the browser. Start with <a href="example.json" download>this working example.json</a>, then swap the titles/prices.</p>
+    <p class="lede" style="margin-bottom:10px;font-size:13px;">Paste a product URL and hit Parse. The page pulls title + price (not the shop page itself). Same job from a terminal: <span class="tag-pill">python3 fetch_listing.py 'URL' &gt; servers.json</span></p>
     <textarea id="pasteBox" placeholder="Dell PowerEdge R740xd 24 Bay SFF — 2x Gold 5218 — 128GB DDR4 — 24x 960GB SSD | 5496
 Dell PowerEdge R740xd 12 Bay LFF 2U Server | 585"></textarea>
     <div class="drop" id="dropZone" style="margin-top:10px;">Drop <code>example.json</code> here, or <label for="fileIn" style="display:inline;color:var(--copper);cursor:pointer;text-transform:none;letter-spacing:0;font-family:var(--font);font-size:13px;">choose a file</label>. Shape: <span class="tag-pill">[{title, price, url}]</span></div>
@@ -694,6 +694,47 @@ function ingestText(text, meta) {
   });
 }
 
+function pushListing(title, extra) {
+  const rec = ingestLine(title, extra);
+  if (rec) listings.push(rec);
+  return rec;
+}
+
+async function fetchShop(url) {
+  const r = await fetch("https://r.jina.ai/" + url);
+  if (!r.ok) throw new Error("reader " + r.status);
+  const text = await r.text();
+  const titleM = text.match(/^Title:\s*(.+)$/m);
+  const priceM = text.match(/Now:\s*\$([0-9,]+\.?\d*)/);
+  const title = titleM ? titleM[1].trim() : "";
+  if (!title) throw new Error("no title in reader output");
+  const price = priceM ? parseFloat(priceM[1].replace(/,/g, "")) : 0;
+  return { title, price, url };
+}
+
+async function ingestPaste(text) {
+  const t = text.trim();
+  if (!t) return;
+  if (t.startsWith("[") || t.startsWith("{")) {
+    ingestText(t);
+    return;
+  }
+  const lines = t.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  for (const line of lines) {
+    const urlPart = line.split("|")[0].trim();
+    if (/^https?:\/\//i.test(urlPart)) {
+      try {
+        const shop = await fetchShop(urlPart);
+        pushListing(shop.title, { price: shop.price, url: shop.url });
+      } catch (_) {
+        pushListing(line);
+      }
+    } else {
+      pushListing(line);
+    }
+  }
+}
+
 function allRows() {
   return [GOOD_TARGET, ...listings];
 }
@@ -842,10 +883,19 @@ document.querySelectorAll(".pill").forEach(btn => {
   btn.onclick = () => { tier = btn.dataset.t; render(); };
 });
 
-document.getElementById("btnParse").onclick = () => {
-  ingestText(document.getElementById("pasteBox").value);
-  persist();
-  renderListings();
+document.getElementById("btnParse").onclick = async () => {
+  const btn = document.getElementById("btnParse");
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Fetching…";
+  try {
+    await ingestPaste(document.getElementById("pasteBox").value);
+    persist();
+    renderListings();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
 };
 
 document.getElementById("btnClearList").onclick = () => {
@@ -863,8 +913,14 @@ const drop = document.getElementById("dropZone");
 const fileIn = document.getElementById("fileIn");
 function eatFile(file) {
   const reader = new FileReader();
-  reader.onload = () => {
-    ingestText(String(reader.result));
+  reader.onload = async () => {
+    const t = String(reader.result);
+    const trimmed = t.trim();
+    if ((trimmed.startsWith("[") || trimmed.startsWith("{")) || !/^https?:\/\//m.test(trimmed)) {
+      ingestText(t);
+    } else {
+      await ingestPaste(t);
+    }
     persist();
     renderListings();
   };
