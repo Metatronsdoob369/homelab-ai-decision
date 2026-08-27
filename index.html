@@ -166,6 +166,32 @@
   .s-up { color: var(--copper); }
   .s-ok { color: var(--mint); }
   .s-later { color: var(--faint); }
+  .drop {
+    border: 1px dashed var(--line); border-radius: 8px; padding: 14px; background: var(--bg);
+    color: var(--muted); font-size: 13px; line-height: 1.45;
+  }
+  .drop.hot { border-color: var(--copper); color: var(--ink); }
+  #pasteBox { min-height: 110px; font-family: var(--mono); font-size: 12px; }
+  .compare-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .verdict {
+    background: #1c1610; border: 1px solid #3a2c1c; border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 12px; font-size: 14px; line-height: 1.5;
+  }
+  .verdict strong { color: #f0c48a; }
+  tr.delta-more td:last-child { color: var(--warn); }
+  tr.delta-same td:last-child { color: var(--faint); }
+  tr.delta-better td:last-child { color: var(--mint); }
+  .list-wrap { overflow-x: auto; }
+  #listingBody tr { cursor: pointer; }
+  #listingBody tr.on { background: #1c1610; }
+  .tag-pill {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .tag-pill.skip { color: #c4b0a0; border-color: #4a3c30; }
+  .tag-pill.keep { color: #f0c48a; border-color: var(--copper-dim); }
+  .tag-pill.stuffed { color: var(--warn); border-color: #6a3a2a; }
+  .tag-pill.ready { color: var(--mint); border-color: #3a5a48; }
   footer { color: var(--faint); font-size: 11px; margin-top: 28px; line-height: 1.5; }
   .compat {
     margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
@@ -173,7 +199,7 @@
   .rule { font-family: var(--mono); font-size: 13px; color: #f0c48a; background: #1c1610; border: 1px solid #3a2c1c; border-radius: 8px; padding: 12px 14px; }
   .rule span { color: var(--muted); font-family: var(--font); display: block; margin-top: 4px; font-size: 12px; }
   @media (max-width: 900px) {
-    .grid-3, .row, .gens, .compat, .form-grid { grid-template-columns: 1fr; }
+    .grid-3, .row, .gens, .compat, .form-grid, .compare-pick { grid-template-columns: 1fr; }
     header, .wrap, .ram-strip { padding-left: 16px; padding-right: 16px; }
   }
 </style>
@@ -182,7 +208,7 @@
 <header>
   <div class="kicker">Look here first · memory generation is the lock</div>
   <h1>Server comparison · what RAM the box will actually take</h1>
-  <p class="lede">Mac path removed. Three rack servers. DDR3 / DDR4 / DDR5 do not mix. The sticky bar below is the thing to train on — generation first, capacity second, speed third.</p>
+  <p class="lede">Paste listings or drop a CSV. The sheet splits ask price into generation, CPUs, RAM, and drives so you can see why one box is $3k cheaper — usually a full tray of SSDs, not better compute.</p>
 </header>
 
 <div class="ram-strip" id="ramStrip">
@@ -259,34 +285,61 @@
   </div>
 
   <div class="card" style="margin-top:16px;">
-    <h2>Add another server to compare</h2>
-    <p class="lede" style="margin-bottom:10px;font-size:13px;">Fill this when you find a listing. Generation is the only required lock. Scores are 0–100 guesses — tweak them after you add the card.</p>
-    <div class="form-grid">
-      <div><label>Name</label><input id="fName" placeholder="PowerEdge R730xd" /></div>
-      <div><label>Form factor</label><input id="fForm" placeholder="2U / 1U / 4-node" /></div>
-      <div>
-        <label>RAM generation</label>
-        <select id="fDdr">
-          <option value="DDR3">DDR3 — skip / legacy</option>
-          <option value="DDR4" selected>DDR4 ECC RDIMM</option>
-          <option value="DDR5">DDR5 ECC RDIMM</option>
-        </select>
-      </div>
-      <div class="wide"><label>Memory contract (slots / speed)</label><input id="fMem" placeholder="DDR4-2400 ECC RDIMM · 24 slots" /></div>
-      <div><label>Usable price band</label><input id="fPrice" placeholder="~$900–1,200" /></div>
-      <div><label>Good $</label><input id="fGood" type="number" value="1200" /></div>
-      <div><label>Great $</label><input id="fGreat" type="number" value="1600" /></div>
-      <div class="wide"><label>Why it is or is not the buy</label><textarea id="fBlurb" placeholder="Same generation as R740xd but older CPUs…"></textarea></div>
-      <div><label>RAM score</label><input id="sRam" type="number" min="0" max="100" value="70" /></div>
-      <div><label>Cores</label><input id="sCores" type="number" min="0" max="100" value="60" /></div>
-      <div><label>Bays / store</label><input id="sStore" type="number" min="0" max="100" value="80" /></div>
-      <div><label>Remote ops</label><input id="sRemote" type="number" min="0" max="100" value="85" /></div>
-      <div><label>Efficiency</label><input id="sEff" type="number" min="0" max="100" value="45" /></div>
-      <div><label>Upgrade path</label><input id="sUp" type="number" min="0" max="100" value="55" /></div>
-      <div><label>Fits $1.5k</label><input id="sPrice" type="number" min="0" max="100" value="75" /></div>
+    <h2>Upload listings</h2>
+    <p class="lede" style="margin-bottom:10px;font-size:13px;">One title per line. Optional price after a pipe or as CSV columns <span class="tag-pill">title, price, url</span>. Generation is parsed from the chassis, not from whatever the seller wrote about RAM.</p>
+    <textarea id="pasteBox" placeholder="Dell PowerEdge R740xd 24 Bay SFF — 2x Gold 5218 — 128GB DDR4 — 24x 960GB SSD | 5496
+Dell PowerEdge R740xd 12 Bay LFF 2U Server | 585"></textarea>
+    <div class="drop" id="dropZone" style="margin-top:10px;">Drop a .csv / .json / .txt file here, or <label for="fileIn" style="display:inline;color:var(--copper);cursor:pointer;text-transform:none;letter-spacing:0;font-family:var(--font);font-size:13px;">choose a file</label>. JSON: array of {title, price, url}.</div>
+    <input id="fileIn" type="file" accept=".csv,.json,.txt,.tsv" hidden />
+    <button class="add" id="btnParse" type="button">Parse into table</button>
+    <button class="ghost" id="btnClearList" type="button">Clear imported</button>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Listings · where the money went</h2>
+    <p class="lede" style="margin-bottom:10px;font-size:13px;">Click a row to set side A. Good target is the $1,500 ready-to-roll floor, not a vendor SKU.</p>
+    <div class="list-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ask</th>
+            <th>Chassis</th>
+            <th>Gen</th>
+            <th>CPUs</th>
+            <th>RAM</th>
+            <th>Drives</th>
+            <th>Flag</th>
+          </tr>
+        </thead>
+        <tbody id="listingBody"></tbody>
+      </table>
     </div>
-    <button class="add" id="btnAdd" type="button">Add to radar</button>
-    <button class="ghost" id="btnReset" type="button">Remove added servers</button>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Why one is cheaper</h2>
+    <div class="compare-pick">
+      <div>
+        <label for="cmpA">Listing A</label>
+        <select id="cmpA"></select>
+      </div>
+      <div>
+        <label for="cmpB">Versus</label>
+        <select id="cmpB"></select>
+      </div>
+    </div>
+    <div class="verdict" id="verdict">Parse a listing, or use the seeded PCSP rows, then pick two sides.</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Element</th>
+          <th>A</th>
+          <th>B</th>
+          <th>Who holds the value</th>
+        </tr>
+      </thead>
+      <tbody id="deltaBody"></tbody>
+    </table>
   </div>
 
   <footer>
@@ -439,89 +492,384 @@ function rebuildCards() {
   });
 }
 
+const DDR_BY_CHASSIS = {
+  r620: "DDR3", r720: "DDR3", r720xd: "DDR3",
+  r630: "DDR4", r730: "DDR4", r730xd: "DDR4",
+  r640: "DDR4", r740: "DDR4", r740xd: "DDR4",
+  r650: "DDR4", r750: "DDR4",
+  r660: "DDR5", r760: "DDR5", r760xd: "DDR5",
+};
+
+const GOOD_TARGET = {
+  id: "good-target",
+  pinned: true,
+  title: "Good target · not a listing",
+  chassis: "R740xd",
+  ddr: "DDR4",
+  cpuCount: 2,
+  cpuSku: "5218",
+  cpuLabel: "Dual Gold 5218-class",
+  ramGB: 192,
+  driveCount: 2,
+  storageTB: 0.9,
+  storageLabel: "2× 240–480 GB boot, empty bays",
+  stuffed: false,
+  chassisOnly: false,
+  ready: true,
+  price: 1500,
+  controller: "H740P",
+  idrac: "Enterprise",
+  nic: "1 GbE",
+};
+
+const SEED = [
+  "Dell PowerEdge R740xd 24SFF chassis only · Alta starting | 817",
+  "Dell PowerEdge R740xd 12 Bay LFF 2U Server (build-your-own / no CPU listed) | 585",
+  "Dell PowerEdge R740xd 24 Bay SFF Server - 2x Intel Xeon Gold 5218 - 128GB DDR4 - 24x 960GB SSD | 5496",
+  "Dell PowerEdge R740xd 24 Bay SFF - 2x Intel Xeon Gold 6248R - 512GB DDR4 - 6x 1.92TB SATA SSD - H740P - iDRAC9 Enterprise | 5683",
+  "Dell PowerEdge R740XD 24B - 2x Gold 6154 - 512GB RAM DDR4 - H740p - 14x 2TB SSD - iDRAC9 Ent. - X710 | 7318",
+];
+
+let listings = [];
+let cmpA = "pcsp-5218";
+let cmpB = "good-target";
+let listSeq = 1;
+
 function persist() {
-  const extra = Object.values(PATHS).filter(p => !BUILTIN.has(p.id));
-  localStorage.setItem("homelab-extra-servers", JSON.stringify(extra.map(p => ({
-    p,
-    spend: { good: TIERS.good.spend[p.id], great: TIERS.great.spend[p.id], excellent: TIERS.excellent.spend[p.id] },
-    need: NEEDS[p.id],
-  }))));
+  localStorage.setItem("homelab-listings", JSON.stringify(listings.filter(l => !l.pinned && !l.seed)));
 }
 
-function restore() {
-  try {
-    const extra = JSON.parse(localStorage.getItem("homelab-extra-servers") || "[]");
-    extra.forEach(({ p, spend, need }) => {
-      PATHS[p.id] = p;
-      TIERS.good.spend[p.id] = spend.good;
-      TIERS.great.spend[p.id] = spend.great;
-      TIERS.excellent.spend[p.id] = spend.excellent;
-      NEEDS[p.id] = need;
-      BOM.forEach(row => { if (row[p.id] == null) row[p.id] = "up"; });
-    });
-  } catch (_) {}
+function money(n) {
+  if (!n && n !== 0) return "—";
+  return "$" + Math.round(n).toLocaleString();
+}
+
+function chassisKey(s) {
+  if (!s) return "";
+  const m = String(s).toUpperCase().match(/R(?:6|7)\d{2}(?:XD|XS)?/);
+  return m ? m[0].toLowerCase() : "";
+}
+
+function parseTitle(raw, priceHint) {
+  const title = String(raw).replace(/\s+/g, " ").trim();
+  const key = chassisKey(title);
+  const chassis = key ? key.replace(/xd$/, "xd").replace(/^r(\d{3})xd$/, "R$1xd").replace(/^r(\d{3})$/, "R$1") : "unknown";
+  const pretty = key
+    ? (key.endsWith("xd") ? "R" + key.slice(1, 4) + "xd" : "R" + key.slice(1).toUpperCase())
+    : "unknown";
+  const ddr = DDR_BY_CHASSIS[key] || (key.includes("760") || key.includes("660") ? "DDR5" : key.includes("720") || key.includes("620") ? "DDR3" : key ? "DDR4" : "unknown");
+
+  let cpuCount = 0, cpuSku = "", cpuTier = "";
+  let cpuM = title.match(/(\d+)\s*x\s*(?:intel\s*)?xeon\s*(gold|silver|bronze|platinum)\s*(\d{4}r?)/i)
+    || title.match(/(\d+)\s*x\s*(gold|silver|bronze|platinum)\s*(\d{4}r?)/i);
+  if (cpuM) {
+    cpuCount = +cpuM[1];
+    cpuTier = cpuM[2];
+    cpuSku = cpuM[3].toUpperCase();
+  } else {
+    cpuM = title.match(/\b(gold|silver|bronze|platinum)\s*(\d{4}r?)/i);
+    if (cpuM) {
+      cpuCount = 2;
+      cpuTier = cpuM[1];
+      cpuSku = cpuM[2].toUpperCase();
+    }
+  }
+  const cpuLabel = cpuSku ? `${cpuCount}× ${cpuTier} ${cpuSku}` : "none listed";
+
+  let ramGB = 0;
+  const ramNamed = title.match(/(\d+)\s*GB\s*(?:RAM|DDR[345])/i);
+  if (ramNamed) ramGB = +ramNamed[1];
+  else {
+    const nums = [...title.matchAll(/(\d+)\s*GB\b/gi)].map(x => +x[1]);
+    const kit = nums.find(n => n >= 32 && n <= 3072 && n % 16 === 0 && ![480, 960, 1920].includes(n));
+    ramGB = kit || 0;
+  }
+
+  let driveCount = 0, storageTB = 0, storageLabel = "not stated";
+  const drv = title.match(/(\d+)\s*x\s*(\d+(?:\.\d+)?)\s*(TB|GB)\s*(SSD|HDD|NVMe|SATA)?/i);
+  if (drv) {
+    driveCount = +drv[1];
+    const n = parseFloat(drv[2]);
+    const gb = drv[3].toUpperCase() === "TB" ? n * 1024 : n;
+    storageTB = +(driveCount * gb / 1024).toFixed(1);
+    storageLabel = `${driveCount}× ${drv[2]} ${drv[3].toUpperCase()} ${(drv[4] || "").toUpperCase()}`.trim();
+  } else if (/no storage|empty bays|no hdd|no ssd/i.test(title)) {
+    storageLabel = "empty";
+  } else if (/chassis only|build.your.own|cto\b/i.test(title) && !cpuSku) {
+    storageLabel = "chassis / CTO";
+  }
+
+  const stuffed = driveCount >= 6;
+  const chassisOnly = !cpuSku || (/chassis only|build.your.own|cto\b/i.test(title) && !ramGB);
+  const ready = !!(cpuSku && ramGB && !chassisOnly);
+  let price = priceHint || 0;
+  if (!price) {
+    const pm = title.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
+    if (pm) price = parseFloat(pm[1].replace(/,/g, ""));
+  }
+  const controller = (title.match(/H7\d{2}P/i) || ["—"])[0].toUpperCase();
+  const idrac = /idrac\s*(9)?\s*ent/i.test(title) ? "Enterprise" : /idrac/i.test(title) ? "present" : "—";
+  const nic = /10\s*gbe|x520|x710/i.test(title) ? "10 GbE" : "—";
+
+  return {
+    title,
+    chassis: pretty,
+    chassisKey: key,
+    ddr,
+    cpuCount,
+    cpuSku,
+    cpuLabel,
+    ramGB,
+    driveCount,
+    storageTB,
+    storageLabel,
+    stuffed,
+    chassisOnly,
+    ready,
+    price,
+    controller,
+    idrac,
+    nic,
+  };
+}
+
+function ingestLine(line, extra) {
+  const raw = line.trim();
+  if (!raw || raw.startsWith("#")) return null;
+  let title = raw, priceHint = extra && extra.price, url = extra && extra.url;
+  const pipe = raw.split("|");
+  if (pipe.length >= 2 && /[\d]/.test(pipe[pipe.length - 1])) {
+    title = pipe.slice(0, -1).join("|").trim();
+    const last = pipe[pipe.length - 1].replace(/[$,\s]/g, "");
+    if (!Number.isNaN(+last)) priceHint = +last;
+  } else if (raw.includes(",")) {
+    const parts = raw.split(",").map(s => s.trim());
+    if (parts.length >= 2 && /^\$?[\d,]+(\.\d+)?$/.test(parts[1])) {
+      title = parts[0];
+      priceHint = parseFloat(parts[1].replace(/[$,]/g, ""));
+      url = parts[2] || url;
+    }
+  }
+  const parsed = parseTitle(title, priceHint);
+  parsed.id = "L" + (listSeq++);
+  parsed.url = url || "";
+  parsed.seed = !!(extra && extra.seed);
+  parsed.pinned = false;
+  if (parsed.cpuSku === "5218" && parsed.driveCount === 24) parsed.id = "pcsp-5218";
+  return parsed;
+}
+
+function ingestText(text, meta) {
+  const t = text.trim();
+  if (t.startsWith("[") || t.startsWith("{")) {
+    try {
+      const data = JSON.parse(t);
+      const arr = Array.isArray(data) ? data : [data];
+      arr.forEach(row => {
+        const title = row.title || row.name || row.listing || "";
+        const rec = ingestLine(title, { price: row.price || row.ask, url: row.url, seed: meta && meta.seed });
+        if (rec) listings.push(rec);
+      });
+      return;
+    } catch (_) {}
+  }
+  t.split(/\n+/).forEach(line => {
+    const rec = ingestLine(line, meta);
+    if (rec) listings.push(rec);
+  });
+}
+
+function allRows() {
+  return [GOOD_TARGET, ...listings];
+}
+
+function byId(id) {
+  return allRows().find(r => r.id === id);
+}
+
+function flag(row) {
+  if (row.pinned) return ["target", "keep"];
+  if (row.ddr === "DDR3") return ["skip DDR3", "skip"];
+  if (row.ddr === "DDR5") return ["skip DDR5", "skip"];
+  if (row.chassisOnly || !row.ready) return ["not ready", "skip"];
+  if (row.stuffed) return ["storage padding", "stuffed"];
+  if (row.ready) return ["ready-to-roll", "ready"];
+  return ["unknown", ""];
+}
+
+function renderListings() {
+  const body = document.getElementById("listingBody");
+  body.innerHTML = allRows().map(r => {
+    const [lab, cls] = flag(r);
+    return `<tr data-id="${r.id}" class="${r.id === cmpA ? "on" : ""}">
+      <td>${money(r.price)}</td>
+      <td>${r.chassis}</td>
+      <td><span class="tag-pill ${r.ddr === "DDR4" ? "keep" : "skip"}">${r.ddr}</span></td>
+      <td>${r.cpuLabel}</td>
+      <td>${r.ramGB ? r.ramGB + " GB" : "—"}</td>
+      <td>${r.storageLabel}</td>
+      <td><span class="tag-pill ${cls}">${lab}</span></td>
+    </tr>`;
+  }).join("");
+  body.querySelectorAll("tr").forEach(tr => {
+    tr.onclick = () => { cmpA = tr.dataset.id; fillCompare(); renderListings(); renderDelta(); };
+  });
+  fillCompare();
+  renderDelta();
+}
+
+function fillCompare() {
+  const opts = allRows().map(r =>
+    `<option value="${r.id}">${r.pinned ? "Good target $1,500" : money(r.price) + " · " + r.chassis + " · " + r.cpuLabel}</option>`
+  ).join("");
+  const a = document.getElementById("cmpA");
+  const b = document.getElementById("cmpB");
+  const av = cmpA, bv = cmpB;
+  a.innerHTML = opts;
+  b.innerHTML = opts;
+  if ([...a.options].some(o => o.value === av)) a.value = av;
+  if ([...b.options].some(o => o.value === bv)) b.value = bv;
+  cmpA = a.value;
+  cmpB = b.value;
+}
+
+function whoHolds(key, a, b) {
+  if (key === "ddr") {
+    if (a.ddr !== b.ddr) return a.ddr === "DDR4" ? "A is the generation that seats in R740xd" : "B is the generation that seats in R740xd";
+    if (a.ddr !== "DDR4") return "Neither is the buy — wrong generation";
+    return "same lock";
+  }
+  if (key === "cpu") {
+    if (!a.cpuSku && b.cpuSku) return "B actually has CPUs — A is not ready-to-roll";
+    if (a.cpuSku && !b.cpuSku) return "A actually has CPUs";
+    if (a.cpuSku === b.cpuSku) return "same compute class";
+    return "CPU SKU differs — not the $3k, but it is a real difference";
+  }
+  if (key === "ram") {
+    const d = (a.ramGB || 0) - (b.ramGB || 0);
+    if (!d) return "same RAM";
+    return d > 0 ? `A has ${d} GB more — better for local models` : `B has ${-d} GB more — better for local models`;
+  }
+  if (key === "drives") {
+    if (a.stuffed && !b.stuffed) return "A is paying for a SAN. That is usually the whole premium.";
+    if (b.stuffed && !a.stuffed) return "B is paying for a SAN. That is usually the whole premium.";
+    if (a.driveCount === b.driveCount) return "same drive story";
+    return "drive count differs";
+  }
+  if (key === "ask") {
+    const d = (a.price || 0) - (b.price || 0);
+    if (!d) return "same ask";
+    return d > 0 ? `A is ${money(d)} more` : `A is ${money(-d)} cheaper`;
+  }
+  if (a[key] === b[key]) return "same";
+  return "differs";
+}
+
+function renderDelta() {
+  const a = byId(cmpA);
+  const b = byId(cmpB);
+  const box = document.getElementById("verdict");
+  if (!a || !b) {
+    box.textContent = "Pick two rows.";
+    document.getElementById("deltaBody").innerHTML = "";
+    return;
+  }
+  const dPrice = (a.price || 0) - (b.price || 0);
+  const bits = [];
+  if (a.ddr !== "DDR4") bits.push(`${a.chassis} is ${a.ddr} — skip, do not compare price.`);
+  else if (b.ddr !== "DDR4" && !b.pinned) bits.push(`${b.chassis} is ${b.ddr} — skip.`);
+  else if (a.chassisOnly) bits.push(`A is chassis-only. The cheap number is not a working LLM box.`);
+  else if (a.stuffed && !b.stuffed) bits.push(`The extra ${money(Math.abs(dPrice))} is almost certainly the drive tray (${a.storageLabel}), not better CPUs. Strip storage and you are looking at the same 14G class as Good.`);
+  else if (!a.stuffed && b.stuffed) bits.push(`B looks expensive because of ${b.storageLabel}. Compute/RAM may still be the better side.`);
+  else if ((a.ramGB || 0) < (b.ramGB || 0)) bits.push(`A is cheaper in part because it has ${b.ramGB - a.ramGB} GB less RAM. For local models that is a real loss, unlike extra HDDs.`);
+  else if (Math.abs(dPrice) > 2000 && a.cpuSku === b.cpuSku) bits.push(`Same CPU class. Price gap is not the processor.`);
+  else bits.push(`Compare the element table. Generation first, RAM capacity second, drives last.`);
+
+  if (a.ready && a.ramGB >= 192 && a.price && a.price <= 1800 && !a.stuffed) bits.push("A is in the Good band: POST, correct DDR4, enough RAM, not a full tray.");
+  box.innerHTML = `<strong>${money(a.price)} vs ${money(b.price)}</strong> · ${bits.join(" ")}`;
+
+  const rows = [
+    ["ddr", "RAM generation", a.ddr, b.ddr],
+    ["cpu", "CPUs", a.cpuLabel, b.cpuLabel],
+    ["ram", "RAM capacity", a.ramGB ? a.ramGB + " GB" : "—", b.ramGB ? b.ramGB + " GB" : "—"],
+    ["drives", "Drives", a.storageLabel, b.storageLabel],
+    ["ctrl", "Controller", a.controller, b.controller],
+    ["idrac", "iDRAC", a.idrac, b.idrac],
+    ["nic", "Network extra", a.nic, b.nic],
+    ["ask", "Ask", money(a.price), money(b.price)],
+  ];
+  document.getElementById("deltaBody").innerHTML = rows.map(([key, label, av, bv]) => {
+    const hold = whoHolds(key, a, b);
+    const cls = /SAN|more|premium|skip|not ready|less RAM/i.test(hold) && !/same/.test(hold)
+      ? (a.stuffed && key === "drives" ? "delta-more" : /better/.test(hold) ? "delta-better" : "delta-more")
+      : /same/.test(hold) ? "delta-same" : "";
+    return `<tr class="${cls}"><td>${label}</td><td>${av}</td><td>${bv}</td><td>${hold}</td></tr>`;
+  }).join("");
+}
+
+function loadSeed() {
+  SEED.forEach(line => {
+    const rec = ingestLine(line, { seed: true });
+    if (!rec) return;
+    rec.seed = true;
+    if (listings.some(l => l.title === rec.title)) return;
+    listings.push(rec);
+  });
+  const stuffed = listings.find(l => l.cpuSku === "5218" && l.driveCount === 24);
+  if (stuffed) { stuffed.id = "pcsp-5218"; cmpA = stuffed.id; }
+}
+
+function persistListings() {
+  persist();
 }
 
 document.querySelectorAll(".pill").forEach(btn => {
   btn.onclick = () => { tier = btn.dataset.t; render(); };
 });
 
-document.getElementById("btnAdd").onclick = () => {
-  const name = document.getElementById("fName").value.trim() || "Unnamed server";
-  const id = slug(name);
-  const ddr = document.getElementById("fDdr").value;
-  PATHS[id] = {
-    id,
-    name,
-    form: document.getElementById("fForm").value.trim() || "rack",
-    ddr,
-    ddrClass: ddr.toLowerCase(),
-    mem: document.getElementById("fMem").value.trim() || (ddr + " ECC RDIMM"),
-    price: document.getElementById("fPrice").value.trim() || "price TBD",
-    blurb: document.getElementById("fBlurb").value.trim() || "Added from a listing.",
-    scores: {
-      ram: +document.getElementById("sRam").value,
-      cores: +document.getElementById("sCores").value,
-      store: +document.getElementById("sStore").value,
-      remote: +document.getElementById("sRemote").value,
-      eff: +document.getElementById("sEff").value,
-      upgrade: +document.getElementById("sUp").value,
-      price: +document.getElementById("sPrice").value,
-    },
-  };
-  TIERS.good.spend[id] = +document.getElementById("fGood").value || 1200;
-  TIERS.great.spend[id] = +document.getElementById("fGreat").value || 1600;
-  TIERS.excellent.spend[id] = Math.round((TIERS.great.spend[id] || 1600) * 1.4);
-  NEEDS[id] = [
-    `<strong>RAM contract:</strong> ${ddr}. If this is not DDR4 ECC RDIMM, it is a different buy than the R740xd.`,
-    `<strong>Must exist to power on:</strong> CPUs, matching ${ddr} sticks, PSU, boot disk, remote management.`,
-    `<strong>Upgrade first:</strong> RAM capacity in the same generation — never mix DDR3/4/5.`,
-  ];
-  BOM.forEach(row => { row[id] = row.ram ? "req" : "up"; });
-  path = id;
+document.getElementById("btnParse").onclick = () => {
+  ingestText(document.getElementById("pasteBox").value);
   persist();
-  rebuildCards();
-  render();
+  renderListings();
 };
 
-document.getElementById("btnReset").onclick = () => {
-  Object.keys(PATHS).forEach(id => {
-    if (!BUILTIN.has(id)) {
-      delete PATHS[id];
-      delete TIERS.good.spend[id];
-      delete TIERS.great.spend[id];
-      delete TIERS.excellent.spend[id];
-      delete NEEDS[id];
-    }
-  });
-  path = "r740";
-  localStorage.removeItem("homelab-extra-servers");
-  rebuildCards();
-  render();
+document.getElementById("btnClearList").onclick = () => {
+  listings = listings.filter(l => l.seed);
+  localStorage.removeItem("homelab-listings");
+  cmpA = listings.find(l => l.id === "pcsp-5218") ? "pcsp-5218" : (listings[0] && listings[0].id);
+  cmpB = "good-target";
+  renderListings();
 };
 
-restore();
+document.getElementById("cmpA").onchange = () => { cmpA = document.getElementById("cmpA").value; renderListings(); };
+document.getElementById("cmpB").onchange = () => { cmpB = document.getElementById("cmpB").value; renderDelta(); };
+
+const drop = document.getElementById("dropZone");
+const fileIn = document.getElementById("fileIn");
+function eatFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    ingestText(String(reader.result));
+    persist();
+    renderListings();
+  };
+  reader.readAsText(file);
+}
+fileIn.onchange = () => { if (fileIn.files[0]) eatFile(fileIn.files[0]); };
+;["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+;["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
+drop.addEventListener("drop", e => {
+  const f = e.dataTransfer.files[0];
+  if (f) eatFile(f);
+});
+
+try {
+  const saved = JSON.parse(localStorage.getItem("homelab-listings") || "[]");
+  saved.forEach(row => listings.push(row));
+} catch (_) {}
+loadSeed();
 rebuildCards();
+renderListings();
 
 function render() {
   document.querySelectorAll(".path").forEach(el => {
