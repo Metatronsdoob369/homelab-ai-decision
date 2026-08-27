@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Homelab AI Decision Sheet — Server RAM generations</title>
+<meta name="description" content="Compare rack servers for local AI. DDR3 / DDR4 / DDR5 first, then the box." />
+<meta property="og:title" content="Homelab AI Decision Sheet" />
+<meta property="og:description" content="DDR4 first. Then the box. R640 · R740xd · R750." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="" />
+<meta property="x:game:image" content="" />
+<script>
+  (function () {
+    var host = location.host || "localhost";
+    var og = "https://" + host + "/og.jpg";
+    var xBanner = "https://" + host + "/x-banner.jpg";
+    function set(sel, val) {
+      var el = document.head.querySelector(sel);
+      if (el) el.setAttribute("content", val);
+    }
+    set('meta[property="og:image"]', og);
+    set('meta[name="twitter:image"]', og);
+    set('meta[property="x:game:image"]', xBanner);
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  :root {
+    --bg: #0c0e10;
+    --bg-2: #14181c;
+    --bg-3: #1c2228;
+    --ink: #e8e4dc;
+    --muted: #8a8478;
+    --faint: #5a564e;
+    --copper: #c4843a;
+    --copper-dim: #8a5a28;
+    --mint: #7d9b8a;
+    --good: #8a9a6a;
+    --great: #c4843a;
+    --excel: #d4c4a0;
+    --warn: #c46a4a;
+    --line: #2a3036;
+    --ddr3: #6a5a48;
+    --ddr4: #c4843a;
+    --ddr5: #8ab4c8;
+    --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--font); }
+  a { color: var(--copper); }
+  header {
+    padding: 24px 32px 18px;
+    background: linear-gradient(180deg, #161b20 0%, var(--bg) 100%);
+  }
+  .kicker {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--copper); margin-bottom: 8px;
+  }
+  h1 { font-size: clamp(22px, 3vw, 32px); font-weight: 560; letter-spacing: -0.02em; }
+  .lede { color: var(--muted); max-width: 760px; margin-top: 8px; line-height: 1.5; font-size: 15px; }
+
+  /* THE thing to train the eye on */
+  .ram-strip {
+    position: sticky; top: 0; z-index: 20;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: #101418;
+    padding: 12px 32px 14px;
+  }
+  .ram-strip .look {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--copper); margin-bottom: 8px;
+  }
+  .gens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .gen {
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 11px;
+    background: var(--bg-2);
+  }
+  .gen.dead { opacity: 0.55; }
+  .gen .tag {
+    font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: 0.04em;
+    line-height: 1;
+  }
+  .gen.ddr3 .tag { color: #b8a090; }
+  .gen.ddr4 .tag { color: var(--ddr4); }
+  .gen.ddr5 .tag { color: var(--ddr5); }
+  .gen .who { font-size: 12px; color: var(--ink); margin-top: 6px; font-weight: 600; }
+  .gen .why { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .eye {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 6px; vertical-align: middle;
+  }
+
+  .wrap { padding: 20px 32px 64px; max-width: 1280px; margin: 0 auto; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin: 8px 0 4px; }
+  input, select, textarea {
+    width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 10px; font-family: var(--font); font-size: 13px;
+  }
+  textarea { min-height: 64px; resize: vertical; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .form-grid .wide { grid-column: 1 / -1; }
+  button.add {
+    margin-top: 12px; background: #2a1c0c; color: #f0c48a; border: 1px solid var(--copper-dim);
+    border-radius: 6px; padding: 8px 14px; font-family: var(--mono); font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+  }
+  button.add:hover { background: #3a2814; }
+  button.ghost {
+    margin-left: 8px; background: transparent; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 12px; font-size: 12px; cursor: pointer;
+  }
+  .path .x {
+    float: right; border: 0; background: transparent; color: var(--faint); cursor: pointer; font-size: 14px;
+  }
+  .card {
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 18px;
+  }
+  .card h2 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 12px; }
+  .path { cursor: pointer; transition: border-color .15s; }
+  .path:hover { border-color: var(--copper-dim); }
+  .path.active { border-color: var(--copper); box-shadow: 0 0 0 1px var(--copper-dim) inset; }
+  .path .name { font-size: 18px; font-weight: 600; margin: 6px 0 2px; }
+  .path .price { font-family: var(--mono); color: var(--copper); font-size: 13px; }
+  .path p { color: var(--muted); font-size: 13px; line-height: 1.45; margin-top: 8px; }
+  .memchip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    padding: 4px 8px; border-radius: 4px; margin-top: 8px;
+  }
+  .memchip.ddr3 { background: #2a221c; color: #c4b0a0; border: 1px solid #4a3c30; }
+  .memchip.ddr4 { background: #2a1c0c; color: #f0c48a; border: 1px solid var(--copper-dim); }
+  .memchip.ddr5 { background: #122028; color: #c8e0ec; border: 1px solid #3a5a68; }
+  .badge { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.on { color: var(--copper); border-color: var(--copper-dim); }
+  .row { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; margin-top: 16px; }
+  #radar { width: 100%; height: 380px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.ram-row td { background: #1c1610; border-color: #3a2c1c; }
+  tr.ram-row td:first-child { box-shadow: inset 3px 0 0 var(--ddr4); font-weight: 700; color: #f0c48a; }
+  .tier-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pill {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer;
+  }
+  .pill[data-t="good"].on { color: #c8d4a8; border-color: var(--good); background: #1a2014; }
+  .pill[data-t="great"].on { color: #f0c48a; border-color: var(--great); background: #24180c; }
+  .pill[data-t="excellent"].on { color: #efe6d0; border-color: var(--excel); background: #242018; }
+  #bars { width: 100%; height: 220px; }
+  .need { font-size: 13px; line-height: 1.55; }
+  .need li { margin: 0 0 8px 18px; color: var(--muted); }
+  .need li strong { color: var(--ink); font-weight: 600; }
+  .status { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .s-req { color: var(--warn); }
+  .s-up { color: var(--copper); }
+  .s-ok { color: var(--mint); }
+  .s-later { color: var(--faint); }
+  footer { color: var(--faint); font-size: 11px; margin-top: 28px; line-height: 1.5; }
+  .compat {
+    margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .rule { font-family: var(--mono); font-size: 13px; color: #f0c48a; background: #1c1610; border: 1px solid #3a2c1c; border-radius: 8px; padding: 12px 14px; }
+  .rule span { color: var(--muted); font-family: var(--font); display: block; margin-top: 4px; font-size: 12px; }
+  @media (max-width: 900px) {
+    .grid-3, .row, .gens, .compat, .form-grid { grid-template-columns: 1fr; }
+    header, .wrap, .ram-strip { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">Look here first · memory generation is the lock</div>
+  <h1>Server comparison · what RAM the box will actually take</h1>
+  <p class="lede">Mac path removed. Three rack servers. DDR3 / DDR4 / DDR5 do not mix. The sticky bar below is the thing to train on — generation first, capacity second, speed third.</p>
+</header>
+
+<div class="ram-strip" id="ramStrip">
+  <div class="look">Train the eye · memory generation</div>
+  <div class="gens">
+    <div class="gen ddr3 dead">
+      <div class="tag">DDR3</div>
+      <div class="who">Skip for this buy</div>
+      <div class="why">R720 / R730-era older sticks. Wrong notch. Will not seat in R640 / R740xd / R750. Cheap, hot, dead end for local LLMs.</div>
+    </div>
+    <div class="gen ddr4" id="gen4">
+      <div class="tag">DDR4 ECC RDIMM</div>
+      <div class="who">R640 · R740xd · R750 live here</div>
+      <div class="why">Registered ECC only. 2666–3200 MT/s typical. This is what the $250 Samsung 64 GB stick is. Not SO-DIMM. Not desktop UDIMM.</div>
+    </div>
+    <div class="gen ddr5">
+      <div class="tag">DDR5 ECC RDIMM</div>
+      <div class="who">R760 / DL380 Gen11 / new only</div>
+      <div class="why">Will not go in an R740xd. Premium and scarce. Only if you jump a generation and blow the $1,500 cap.</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="grid-3" id="paths"></div>
+
+  <div class="compat">
+    <div class="rule">RULE · sticks must match the chassis generation
+      <span>DDR4 RDIMM → R640 / R740xd / R750. DDR5 RDIMM → R760+. DDR3 → leave on the table.</span>
+    </div>
+    <div class="rule" id="liveRam">…
+      <span>Selected server memory contract</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>Capability radar</h2>
+      <svg id="radar" viewBox="0 0 520 380" role="img" aria-label="Capability radar"></svg>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="card">
+      <h2>Quality bar</h2>
+      <div class="tier-pills">
+        <button class="pill on" data-t="good">Good · boots + 7B</button>
+        <button class="pill" data-t="great">Great · 13B–34B Q</button>
+        <button class="pill" data-t="excellent">Excellent · GPU later</button>
+      </div>
+      <svg id="bars" viewBox="0 0 480 220"></svg>
+      <p class="lede" id="tierBlurb" style="margin-top:8px;font-size:13px;"></p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2 id="bomTitle">Bill of materials</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Element</th>
+          <th>Role</th>
+          <th>Good</th>
+          <th>Great</th>
+          <th>Excellent</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="bom"></tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Required to run · upgrade order</h2>
+    <ol class="need" id="needs"></ol>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Add another server to compare</h2>
+    <p class="lede" style="margin-bottom:10px;font-size:13px;">Fill this when you find a listing. Generation is the only required lock. Scores are 0–100 guesses — tweak them after you add the card.</p>
+    <div class="form-grid">
+      <div><label>Name</label><input id="fName" placeholder="PowerEdge R730xd" /></div>
+      <div><label>Form factor</label><input id="fForm" placeholder="2U / 1U / 4-node" /></div>
+      <div>
+        <label>RAM generation</label>
+        <select id="fDdr">
+          <option value="DDR3">DDR3 — skip / legacy</option>
+          <option value="DDR4" selected>DDR4 ECC RDIMM</option>
+          <option value="DDR5">DDR5 ECC RDIMM</option>
+        </select>
+      </div>
+      <div class="wide"><label>Memory contract (slots / speed)</label><input id="fMem" placeholder="DDR4-2400 ECC RDIMM · 24 slots" /></div>
+      <div><label>Usable price band</label><input id="fPrice" placeholder="~$900–1,200" /></div>
+      <div><label>Good $</label><input id="fGood" type="number" value="1200" /></div>
+      <div><label>Great $</label><input id="fGreat" type="number" value="1600" /></div>
+      <div class="wide"><label>Why it is or is not the buy</label><textarea id="fBlurb" placeholder="Same generation as R740xd but older CPUs…"></textarea></div>
+      <div><label>RAM score</label><input id="sRam" type="number" min="0" max="100" value="70" /></div>
+      <div><label>Cores</label><input id="sCores" type="number" min="0" max="100" value="60" /></div>
+      <div><label>Bays / store</label><input id="sStore" type="number" min="0" max="100" value="80" /></div>
+      <div><label>Remote ops</label><input id="sRemote" type="number" min="0" max="100" value="85" /></div>
+      <div><label>Efficiency</label><input id="sEff" type="number" min="0" max="100" value="45" /></div>
+      <div><label>Upgrade path</label><input id="sUp" type="number" min="0" max="100" value="55" /></div>
+      <div><label>Fits $1.5k</label><input id="sPrice" type="number" min="0" max="100" value="75" /></div>
+    </div>
+    <button class="add" id="btnAdd" type="button">Add to radar</button>
+    <button class="ghost" id="btnReset" type="button">Remove added servers</button>
+  </div>
+
+  <footer>
+    DDR4 ECC Registered DIMM is the only RAM that belongs in R640 / R740xd / R750. The Samsung M393A8K40B22-CWD6Y 64 GB stick is DDR4-2666 ECC RDIMM — correct family for those three, wrong for an iMac and wrong for an R760.
+  </footer>
+</div>
+<script>
+const AXES = [
+  { key: "ram", label: "RAM headroom" },
+  { key: "cores", label: "CPU cores" },
+  { key: "store", label: "Drive bays" },
+  { key: "remote", label: "Remote ops" },
+  { key: "eff", label: "Efficiency" },
+  { key: "upgrade", label: "Upgrade path" },
+  { key: "price", label: "Under $1.5k" },
+];
+
+const PATHS = {
+  r640: {
+    id: "r640",
+    name: "PowerEdge R640",
+    form: "1U",
+    ddr: "DDR4",
+    ddrClass: "ddr4",
+    mem: "DDR4-2666 ECC RDIMM · 24 slots · max ~3 TB",
+    price: "~$800–1,400 usable",
+    blurb: "Dense 1U. Same DDR4 family as the R740xd. Fewer front bays. Fine compute node, weaker storage box.",
+    scores: { ram: 80, cores: 76, store: 45, remote: 90, eff: 62, upgrade: 70, price: 78 },
+  },
+  r740: {
+    id: "r740",
+    name: "PowerEdge R740xd",
+    form: "2U storage-dense",
+    ddr: "DDR4",
+    ddrClass: "ddr4",
+    mem: "DDR4-2666/2933 ECC RDIMM · 24 slots · max 3 TB",
+    price: "~$1,350–1,550 usable",
+    blurb: "The target. Same DDR4 contract as R640. Many more bays for the model library.",
+    scores: { ram: 86, cores: 78, store: 90, remote: 92, eff: 50, upgrade: 88, price: 70 },
+  },
+  r750: {
+    id: "r750",
+    name: "PowerEdge R750",
+    form: "2U Ice Lake",
+    ddr: "DDR4",
+    ddrClass: "ddr4",
+    mem: "DDR4-3200 ECC RDIMM · 32 slots · max 2–8 TB",
+    price: "~$2,500+ typical",
+    blurb: "Still DDR4 — not DDR5. Better cores and efficiency. Usually misses the $1,500 day-one cap.",
+    scores: { ram: 90, cores: 88, store: 80, remote: 94, eff: 78, upgrade: 84, price: 28 },
+  },
+};
+
+const TIERS = {
+  good: {
+    blurb: "Boots, iDRAC reachable, 7B on CPU. RAM floor is 128 GB of the correct generation.",
+    models: "7B comfortably · some 13B Q",
+    spend: { r640: 1100, r740: 1350, r750: 2500 },
+  },
+  great: {
+    blurb: "192–256 GB of matching DDR4 ECC RDIMM. RAID boot. 2 TB model library.",
+    models: "13B–34B Q on CPU",
+    spend: { r640: 1500, r740: 1650, r750: 3200 },
+  },
+  excellent: {
+    blurb: "Same DDR4 node plus a used GPU later. Still not a DDR5 chassis.",
+    models: "34B Q + GPU 7B–13B fast",
+    spend: { r640: 2200, r740: 2400, r750: 4500 },
+  },
+};
+
+const BOM = [
+  { el: "RAM generation", role: "The lock — look at the sticky bar", good: "DDR4 ECC RDIMM only", great: "DDR4-2666/2933 matched kit", excel: "Still DDR4 · more GB", r640: "req", r740: "req", r750: "req", ram: true },
+  { el: "RAM capacity", role: "Hold model weights", good: "128 GB (4×32 or 2×64)", great: "192–256 GB", excel: "384 GB+", r640: "up", r740: "up", r750: "up", ram: true },
+  { el: "Compute", role: "Run OS + inference", good: "Dual Gold 5218-class", great: "Gold 6230 / 6330", excel: "Same + used GPU", r640: "req", r740: "req", r750: "req" },
+  { el: "Boot storage", role: "OS that survives a crash", good: "1× 240–480 GB SSD", great: "2× SSD RAID1 / BOSS", excel: "Enterprise pair", r640: "req", r740: "req", r750: "req" },
+  { el: "Model store", role: "House GGUF / datasets", good: "870 QVO 2 TB SATA", great: "2–4 TB TLC / mixed NVMe", excel: "NVMe + QVO cold", r640: "up", r740: "up", r750: "up" },
+  { el: "Controller", role: "Talk to disks", good: "HBA or H730P", great: "H740P / H755", excel: "Same + BOSS", r640: "req", r740: "req", r750: "req" },
+  { el: "Remote mgmt", role: "Empty condo", good: "iDRAC Express + VPN", great: "iDRAC Enterprise", excel: "Ent + UPS alerts", r640: "req", r740: "req", r750: "ok" },
+  { el: "Rails / power", role: "Physical + circuit", good: "Rails + dual PSU", great: "UPS 1500VA", excel: "PDU + exhaust", r640: "req", r740: "req", r750: "req" },
+  { el: "OS stack", role: "Run the AI", good: "Ubuntu + Ollama", great: "Proxmox + LXC", excel: "Proxmox + GPU passthrough", r640: "req", r740: "req", r750: "req" },
+];
+
+const NEEDS = {
+  r640: [
+    "<strong>RAM contract:</strong> DDR4 ECC Registered DIMM. Same family as the Samsung 64 GB stick. Not DDR3. Not DDR5. Not SO-DIMM.",
+    "<strong>Must exist to power on:</strong> dual CPUs, matching DDR4 RDIMMs, both PSUs, boot SSD, iDRAC, 1U rails.",
+    "<strong>Must exist to run a model:</strong> 128 GB+ of that DDR4, Linux, Ollama, a GGUF disk.",
+    "<strong>Upgrade first:</strong> RAM to 192 GB of the same DDR4 speed/rank mix.",
+    "<strong>Tradeoff:</strong> 1U is quieter-ish than a loaded 2U but you run out of bays for the model library fast.",
+  ],
+  r740: [
+    "<strong>RAM contract:</strong> DDR4 ECC RDIMM · 24 slots. Look at the copper DDR4 chip on the card — that is the only generation this chassis will accept.",
+    "<strong>Must exist to power on:</strong> dual CPUs, DDR4 RDIMM populated per CPU, dual PSU, boot SSD, rails, iDRAC.",
+    "<strong>Must exist to run a model:</strong> 128 GB+ DDR4, Linux, Ollama/llama.cpp, QVO or better for GGUF files.",
+    "<strong>Upgrade first:</strong> more DDR4 (192–256 GB). Capacity beats extra spinning disks.",
+    "<strong>Upgrade second:</strong> RAID1 boot + H740P. Then GPU later. Never a DDR5 stick.",
+  ],
+  r750: [
+    "<strong>RAM contract:</strong> still DDR4 (usually 3200). Ice Lake did not switch the platform to DDR5. R760 is the DDR5 jump.",
+    "<strong>Must exist:</strong> same story as R740xd, often already closer to Great on cores.",
+    "<strong>Budget:</strong> used R750 configs usually sit above the $1,500 day-one cap. Buy only if a loaded unit lands cheap.",
+    "<strong>Do not assume DDR5</strong> just because the box is newer than an R740xd.",
+  ],
+};
+
+let path = "r740";
+let tier = "good";
+const BUILTIN = new Set(Object.keys(PATHS));
+const PALETTE = ["#c4843a", "#7d9b8a", "#8ab4c8", "#c46a4a", "#b8a0d0", "#d4c4a0", "#6a8aa0"];
+
+function slug(name) {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 16) || "srv";
+  let id = base, n = 2;
+  while (PATHS[id]) id = base + n++;
+  return id;
+}
+
+function rebuildCards() {
+  const el = document.getElementById("paths");
+  el.innerHTML = "";
+  Object.values(PATHS).forEach(p => {
+    const d = document.createElement("div");
+    d.className = "card path" + (p.id === path ? " active" : "");
+    d.dataset.id = p.id;
+    const rm = BUILTIN.has(p.id) ? "" : `<button class="x" data-rm="${p.id}" title="Remove">×</button>`;
+    d.innerHTML = `${rm}<div class="badge ${p.id===path?"on":""}">${p.form}</div>
+      <div class="name">${p.name}</div>
+      <div class="price">${p.price}</div>
+      <div class="memchip ${p.ddrClass}">${p.ddr} ${p.ddr === "DDR3" ? "legacy" : "ECC RDIMM"}</div>
+      <p>${p.blurb}</p>`;
+    d.onclick = (e) => {
+      if (e.target.dataset.rm) {
+        e.stopPropagation();
+        delete PATHS[e.target.dataset.rm];
+        delete TIERS.good.spend[e.target.dataset.rm];
+        delete TIERS.great.spend[e.target.dataset.rm];
+        delete TIERS.excellent.spend[e.target.dataset.rm];
+        delete NEEDS[e.target.dataset.rm];
+        if (path === e.target.dataset.rm) path = "r740";
+        persist();
+        rebuildCards();
+        render();
+        return;
+      }
+      path = p.id;
+      render();
+    };
+    el.appendChild(d);
+  });
+}
+
+function persist() {
+  const extra = Object.values(PATHS).filter(p => !BUILTIN.has(p.id));
+  localStorage.setItem("homelab-extra-servers", JSON.stringify(extra.map(p => ({
+    p,
+    spend: { good: TIERS.good.spend[p.id], great: TIERS.great.spend[p.id], excellent: TIERS.excellent.spend[p.id] },
+    need: NEEDS[p.id],
+  }))));
+}
+
+function restore() {
+  try {
+    const extra = JSON.parse(localStorage.getItem("homelab-extra-servers") || "[]");
+    extra.forEach(({ p, spend, need }) => {
+      PATHS[p.id] = p;
+      TIERS.good.spend[p.id] = spend.good;
+      TIERS.great.spend[p.id] = spend.great;
+      TIERS.excellent.spend[p.id] = spend.excellent;
+      NEEDS[p.id] = need;
+      BOM.forEach(row => { if (row[p.id] == null) row[p.id] = "up"; });
+    });
+  } catch (_) {}
+}
+
+document.querySelectorAll(".pill").forEach(btn => {
+  btn.onclick = () => { tier = btn.dataset.t; render(); };
+});
+
+document.getElementById("btnAdd").onclick = () => {
+  const name = document.getElementById("fName").value.trim() || "Unnamed server";
+  const id = slug(name);
+  const ddr = document.getElementById("fDdr").value;
+  PATHS[id] = {
+    id,
+    name,
+    form: document.getElementById("fForm").value.trim() || "rack",
+    ddr,
+    ddrClass: ddr.toLowerCase(),
+    mem: document.getElementById("fMem").value.trim() || (ddr + " ECC RDIMM"),
+    price: document.getElementById("fPrice").value.trim() || "price TBD",
+    blurb: document.getElementById("fBlurb").value.trim() || "Added from a listing.",
+    scores: {
+      ram: +document.getElementById("sRam").value,
+      cores: +document.getElementById("sCores").value,
+      store: +document.getElementById("sStore").value,
+      remote: +document.getElementById("sRemote").value,
+      eff: +document.getElementById("sEff").value,
+      upgrade: +document.getElementById("sUp").value,
+      price: +document.getElementById("sPrice").value,
+    },
+  };
+  TIERS.good.spend[id] = +document.getElementById("fGood").value || 1200;
+  TIERS.great.spend[id] = +document.getElementById("fGreat").value || 1600;
+  TIERS.excellent.spend[id] = Math.round((TIERS.great.spend[id] || 1600) * 1.4);
+  NEEDS[id] = [
+    `<strong>RAM contract:</strong> ${ddr}. If this is not DDR4 ECC RDIMM, it is a different buy than the R740xd.`,
+    `<strong>Must exist to power on:</strong> CPUs, matching ${ddr} sticks, PSU, boot disk, remote management.`,
+    `<strong>Upgrade first:</strong> RAM capacity in the same generation — never mix DDR3/4/5.`,
+  ];
+  BOM.forEach(row => { row[id] = row.ram ? "req" : "up"; });
+  path = id;
+  persist();
+  rebuildCards();
+  render();
+};
+
+document.getElementById("btnReset").onclick = () => {
+  Object.keys(PATHS).forEach(id => {
+    if (!BUILTIN.has(id)) {
+      delete PATHS[id];
+      delete TIERS.good.spend[id];
+      delete TIERS.great.spend[id];
+      delete TIERS.excellent.spend[id];
+      delete NEEDS[id];
+    }
+  });
+  path = "r740";
+  localStorage.removeItem("homelab-extra-servers");
+  rebuildCards();
+  render();
+};
+
+restore();
+rebuildCards();
+
+function render() {
+  document.querySelectorAll(".path").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === path);
+    el.querySelector(".badge").classList.toggle("on", el.dataset.id === path);
+  });
+  document.querySelectorAll(".pill").forEach(b => b.classList.toggle("on", b.dataset.t === tier));
+  document.getElementById("tierBlurb").textContent = TIERS[tier].blurb + "  ·  " + TIERS[tier].models;
+  const p = PATHS[path];
+  document.getElementById("liveRam").innerHTML =
+    p.ddr + " · " + p.mem + "<span>Selected server memory contract — buy only this family</span>";
+  document.getElementById("gen4").style.outline = p.ddr === "DDR4" ? "1px solid #c4843a" : "none";
+  document.querySelector(".gen.ddr3").style.outline = p.ddr === "DDR3" ? "1px solid #b8a090" : "none";
+  document.querySelector(".gen.ddr5").style.outline = p.ddr === "DDR5" ? "1px solid #8ab4c8" : "none";
+  drawRadar();
+  drawBars();
+  drawBom();
+  document.getElementById("needs").innerHTML = NEEDS[path].map(t => `<li>${t}</li>`).join("");
+  document.getElementById("bomTitle").textContent = "Bill of materials · " + p.name + " · " + tier;
+}
+
+function drawRadar() {
+  const svg = d3.select("#radar");
+  svg.selectAll("*").remove();
+  const cx = 250, cy = 195, r = 130, n = AXES.length;
+  const angle = (i) => -Math.PI / 2 + (2 * Math.PI * i) / n;
+  const pt = (i, v) => [cx + Math.cos(angle(i)) * r * v / 100, cy + Math.sin(angle(i)) * r * v / 100];
+  [20,40,60,80,100].forEach(v => {
+    svg.append("polygon").attr("points", AXES.map((_, i) => pt(i, v).join(",")).join(" "))
+      .attr("fill", "none").attr("stroke", "#2a3036");
+  });
+  AXES.forEach((a, i) => {
+    const [x, y] = pt(i, 100);
+    svg.append("line").attr("x1", cx).attr("y1", cy).attr("x2", x).attr("y2", y).attr("stroke", "#2a3036");
+    svg.append("text").attr("x", cx + Math.cos(angle(i)) * (r + 24))
+      .attr("y", cy + Math.sin(angle(i)) * (r + 24))
+      .attr("text-anchor", "middle").attr("dominant-baseline", "middle")
+      .attr("fill", "#8a8478").attr("font-size", 10).text(a.label);
+  });
+  const ids = Object.keys(PATHS);
+  const colors = {};
+  ids.forEach((id, i) => { colors[id] = PALETTE[i % PALETTE.length]; });
+  ids.forEach(id => {
+    const s = PATHS[id].scores;
+    svg.append("polygon")
+      .attr("points", AXES.map((a, i) => pt(i, s[a.key]).join(",")).join(" "))
+      .attr("fill", colors[id]).attr("fill-opacity", id === path ? 0.28 : 0.05)
+      .attr("stroke", colors[id]).attr("stroke-width", id === path ? 2.2 : 1)
+      .attr("stroke-opacity", id === path ? 1 : 0.4);
+  });
+  document.getElementById("legend").innerHTML = ids.map(id =>
+    `<span><span class="sw" style="background:${colors[id]}"></span>${PATHS[id].name}</span>`
+  ).join("");
+}
+
+function drawBars() {
+  const svg = d3.select("#bars");
+  svg.selectAll("*").remove();
+  const data = Object.values(PATHS).map(p => ({ id: p.id, name: p.name.replace("PowerEdge ", ""), v: TIERS[tier].spend[p.id] || 0 }));
+  const max = Math.max(4800, ...data.map(d => d.v), 1);
+  const x0 = 90, w = 360, y = 18, gap = Math.min(58, 180 / Math.max(data.length, 1));
+  data.forEach((d, i) => {
+    const yy = y + i * gap;
+    svg.append("text").attr("x", 0).attr("y", yy + 14).attr("fill", "#8a8478").attr("font-size", 12).text(d.name);
+    svg.append("rect").attr("x", x0).attr("y", yy).attr("width", w).attr("height", 22).attr("fill", "#1c2228").attr("rx", 3);
+    svg.append("rect").attr("x", x0).attr("y", yy).attr("width", Math.max(4, w * d.v / max)).attr("height", 22)
+      .attr("fill", d.id === path ? "#c4843a" : "#3a444c").attr("rx", 3);
+    svg.append("text").attr("x", x0 + 8).attr("y", yy + 15).attr("fill", "#e8e4dc").attr("font-size", 11)
+      .attr("font-family", "IBM Plex Mono, monospace").text("$" + d.v.toLocaleString());
+  });
+}
+
+function drawBom() {
+  const map = { req: ["required", "s-req"], up: ["upgrade", "s-up"], ok: ["enough", "s-ok"], na: ["n/a", "s-later"] };
+  document.getElementById("bom").innerHTML = BOM.map(r => {
+    const st = map[r[path]] || map.ok;
+    return `<tr class="${r.ram ? "ram-row" : ""}">
+      <td>${r.el}</td><td>${r.role}</td><td>${r.good}</td><td>${r.great}</td><td>${r.excel}</td>
+      <td class="status ${st[1]}">${st[0]}</td>
+    </tr>`;
+  }).join("");
+}
+
+render();
+</script>
+</body>
+</html>
