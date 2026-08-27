@@ -286,10 +286,10 @@
 
   <div class="card" style="margin-top:16px;">
     <h2>Upload listings</h2>
-    <p class="lede" style="margin-bottom:10px;font-size:13px;">One title per line. Optional price after a pipe or as CSV columns <span class="tag-pill">title, price, url</span>. Generation is parsed from the chassis, not from whatever the seller wrote about RAM.</p>
+    <p class="lede" style="margin-bottom:10px;font-size:13px;">Drop a JSON file — not a product URL. A shop link is not fetched from the browser. Start with <a href="example.json" download>this working example.json</a>, then swap the titles/prices.</p>
     <textarea id="pasteBox" placeholder="Dell PowerEdge R740xd 24 Bay SFF — 2x Gold 5218 — 128GB DDR4 — 24x 960GB SSD | 5496
 Dell PowerEdge R740xd 12 Bay LFF 2U Server | 585"></textarea>
-    <div class="drop" id="dropZone" style="margin-top:10px;">Drop a .csv / .json / .txt file here, or <label for="fileIn" style="display:inline;color:var(--copper);cursor:pointer;text-transform:none;letter-spacing:0;font-family:var(--font);font-size:13px;">choose a file</label>. JSON: array of {title, price, url}.</div>
+    <div class="drop" id="dropZone" style="margin-top:10px;">Drop <code>example.json</code> here, or <label for="fileIn" style="display:inline;color:var(--copper);cursor:pointer;text-transform:none;letter-spacing:0;font-family:var(--font);font-size:13px;">choose a file</label>. Shape: <span class="tag-pill">[{title, price, url}]</span></div>
     <input id="fileIn" type="file" accept=".csv,.json,.txt,.tsv" hidden />
     <button class="add" id="btnParse" type="button">Parse into table</button>
     <button class="ghost" id="btnClearList" type="button">Clear imported</button>
@@ -633,6 +633,18 @@ function parseTitle(raw, priceHint) {
   };
 }
 
+function titleFromMaybeUrl(raw) {
+  const m = String(raw).match(/https?:\/\/[^\s|,]+/i);
+  if (!m) return { title: raw, url: "" };
+  try {
+    const path = new URL(m[0]).pathname.replace(/\/+$/, "");
+    const slug = decodeURIComponent(path.split("/").pop() || "");
+    return { title: slug.replace(/-/g, " "), url: m[0] };
+  } catch (_) {
+    return { title: raw, url: m[0] };
+  }
+}
+
 function ingestLine(line, extra) {
   const raw = line.trim();
   if (!raw || raw.startsWith("#")) return null;
@@ -650,6 +662,9 @@ function ingestLine(line, extra) {
       url = parts[2] || url;
     }
   }
+  const unwrapped = titleFromMaybeUrl(title);
+  title = unwrapped.title;
+  url = url || unwrapped.url;
   const parsed = parseTitle(title, priceHint);
   parsed.id = "L" + (listSeq++);
   parsed.url = url || "";
